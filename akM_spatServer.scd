@@ -1,4 +1,4 @@
-(
+
 
 // ######################################################
 // ################# LANGUAGE-SIDE INIT #################
@@ -22,7 +22,7 @@ s.options.numWireBufs = 2048;
 s.options.maxNodes = 1024 * 32;
 //s.options.inDevice = "VB-Matrix VASIO-64A";
 //s.options.outDevice = "VB-Matrix VASIO-64A";
-s.options.device = "VB-Matrix VASIO-64A";
+s.options.device = "JackRouter";
 s.options.sampleRate = 48000;
 s.options.numOutputBusChannels = 32;
 s.options.numInputBusChannels = 64;
@@ -1156,31 +1156,4 @@ s.waitForBoot({
 
 });
 
-
-)
-
-
-//================================================================
-//================================================================
-//================================================================
-//================================================================
-//================================================================
-//================================================================
-
-~audioBussesSpeakersDry.scope;
-~audioBussesSpeakersEQ[\sat1].scope;
-~controlBussesSatGains.scope;
-~controlBussesSatEQ[\sat2].scope;
-
-~oscHeartbeatRoutine.stop;
-
-
-(
-o = OSCFunc({ |msg|
-	msg.postln;
-    //"peak: %, rms: %".format(msg[3], msg[4]).postln
-}, '/testLevels');
-)
-
-o.free;
 
