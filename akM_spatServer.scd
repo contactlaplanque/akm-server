@@ -1014,6 +1014,7 @@ s.waitForBoot({
 		{
 			arg msg;
 			~controlBussesSystemGain.setAt(0,~dB_to_factor.value(msg[1]));
+			~oscSendNetAddr.sendMsg("/akMserver/ack/system/gain",msg[1]);
 		},
 		'/system/gain',
 		NetAddr("127.0.0.1"),
@@ -1119,6 +1120,18 @@ s.waitForBoot({
 
 	});
 
+	// QUIT SERVER
+	OSCdef(
+		("serverQuit-OSCreceiver").asSymbol, //receiver name
+		{
+			arg msg;
+			s.quit();
+		},
+		("quit").asSymbol,
+		NetAddr("127.0.0.1"),
+		~oscReceivePort
+		);
+
 	s.sync;
 
 	" ok.".postln;
@@ -1134,7 +1147,7 @@ s.waitForBoot({
 			if (
 				s.serverRunning,
 				{
-					~oscSendNetAddr.sendMsg("/sc/status/heartbeat",1);
+					~oscSendNetAddr.sendMsg("/akMserver/status/heartbeat",1);
 				},
 				{}
 			);
