@@ -20,13 +20,6 @@ s.options.numBuffers = (2048 * 2048) * 2;
 s.options.memSize = 8192 * 128;
 s.options.numWireBufs = 2048;
 s.options.maxNodes = 1024 * 32;
-//s.options.inDevice = "VB-Matrix VASIO-64A";
-//s.options.outDevice = "VB-Matrix VASIO-64A";
-s.options.device = "JackRouter";
-s.options.sampleRate = 48000;
-s.options.numOutputBusChannels = 32;
-s.options.numInputBusChannels = 64;
-s.options.safetyClipThreshold = 1;
 
 " ok.".postln;
 
@@ -43,6 +36,22 @@ s.options.safetyClipThreshold = 1;
 ~numSources = 32;
 ~oscReceivePort = 23446;
 ~oscSendNetAddr = NetAddr("127.0.0.1",23444);
+
+" ok.".postln;
+
+//==================== AUDIO INTERFACE SETTINGS ====================
+
+"[INIT] audio interface settings...".post;
+
+//s.options.inDevice = "VB-Matrix VASIO-64A";
+//s.options.outDevice = "VB-Matrix VASIO-64A";
+s.options.device = "JackRouter";
+s.options.sampleRate = 48000;
+
+s.options.safetyClipThreshold = 1;
+
+s.options.numOutputBusChannels = ~numSpeakers + ~numSubs;
+s.options.numInputBusChannels = ~numSources;
 
 " ok.".postln;
 
@@ -583,7 +592,7 @@ s.waitForBoot({
 
 			reverbDryWet = In.kr(~controlBussesInputs[sourceId],~numSourceParameters)[6];
 
-			audioInput = SoundIn.ar(31 + sourceIndex);
+			audioInput = SoundIn.ar(sourceIndex);
 			attenuationFactor = In.kr(~controlBussesSourcesDistanceAttenuation[sourceId],1);
 
 			//sats
