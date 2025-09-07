@@ -592,7 +592,7 @@ s.waitForBoot({
 
 			reverbDryWet = In.kr(~controlBussesInputs[sourceId],~numSourceParameters)[6];
 
-			audioInput = SoundIn.ar(sourceIndex);
+			audioInput = SoundIn.ar(sourceIndex - 1);
 			attenuationFactor = In.kr(~controlBussesSourcesDistanceAttenuation[sourceId],1);
 
 			//sats
@@ -1177,5 +1177,6 @@ s.waitForBoot({
 	"--------------------------------------------------------".postln;
 
 });
+
 
 
