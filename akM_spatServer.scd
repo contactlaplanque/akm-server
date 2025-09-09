@@ -992,11 +992,14 @@ s.waitForBoot({
 			("source"++i++"-OSCreceiver").asSymbol, //receiver name
 			{                                            //function called when valid message is received
 				arg msg;
+				var ackArray = Array.fill(~numSourceParameters,0);
 				//msg.postln;
 				(1..~numSourceParameters).do{
 					arg i;
 					~controlBussesInputs[sourceId].setAt(i-1,msg[i]);
+					ackArray[i-1] = msg[i];
 				};
+				~oscSendNetAddr.sendMsg(("/akMserver/ack/source"++i).asSymbol,*ackArray);
 			},
 			("source"++i).asSymbol,             //OSC address
 			NetAddr("127.0.0.1"),
@@ -1177,6 +1180,5 @@ s.waitForBoot({
 	"--------------------------------------------------------".postln;
 
 });
-
 
 
