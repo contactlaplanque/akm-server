@@ -995,13 +995,13 @@ s.waitForBoot({
 				var ackArray = Array.fill(~numSourceParameters,0);
 				//msg.postln;
 				(1..~numSourceParameters).do{
-					arg i;
-					~controlBussesInputs[sourceId].setAt(i-1,msg[i]);
-					ackArray[i-1] = msg[i];
+					arg j;
+					~controlBussesInputs[sourceId].setAt(j-1,msg[j]);
+					ackArray[j-1] = msg[j];
 				};
-				~oscSendNetAddr.sendMsg(("/akMserver/ack/source"++i).asSymbol,*ackArray);
+				~oscSendNetAddr.sendMsg(("/akMserver/ack/source"++i++"/params").asSymbol,*ackArray);
 			},
-			("source"++i).asSymbol,             //OSC address
+			("source"++i++"/params").asSymbol,             //OSC address
 			NetAddr("127.0.0.1"),
 			~oscReceivePort
 		);
@@ -1012,10 +1012,14 @@ s.waitForBoot({
 		("reverb-OSCreceiver").asSymbol, //receiver name
 		{
 			arg msg;
+			var ackArray = Array.fill(2,0);
 			~controlBussesReverb.setAt(0,msg[1]);
 			~controlBussesReverb.setAt(1,msg[2]);
+			ackArray[0] = msg[1];
+			ackArray[1] = msg[2];
+			~oscSendNetAddr.sendMsg(("/akMserver/ack/system/reverb").asSymbol,*ackArray);
 		},
-		'/reverb',
+		'/system/reverb',
 		NetAddr("127.0.0.1"),
 		~oscReceivePort
 	);
@@ -1038,10 +1042,14 @@ s.waitForBoot({
 		("satsFilter-OSCreceiver").asSymbol, //receiver name
 		{
 			arg msg;
+			var ackArray = Array.fill(2,0);
 			~controlBussesSatFilter.setAt(0,msg[1]);
 			~controlBussesSatFilter.setAt(1,msg[2]);
+			ackArray[0] = msg[1];
+			ackArray[1] = msg[2];
+			~oscSendNetAddr.sendMsg(("/akMserver/ack/system/filter/sats").asSymbol,*ackArray);
 		},
-		'/sats/filter',
+		'/system/filter/sats',
 		NetAddr("127.0.0.1"),
 		~oscReceivePort
 	);
@@ -1051,10 +1059,14 @@ s.waitForBoot({
 		("subsFilter-OSCreceiver").asSymbol, //receiver name
 		{
 			arg msg;
+			var ackArray = Array.fill(2,0);
 			~controlBussesSubFilter.setAt(0,msg[1]);
 			~controlBussesSubFilter.setAt(1,msg[2]);
+			ackArray[0] = msg[1];
+			ackArray[1] = msg[2];
+			~oscSendNetAddr.sendMsg(("/akMserver/ack/system/filter/subs").asSymbol,*ackArray);
 		},
-		'/subs/filter',
+		'/system/filter/subs',
 		NetAddr("127.0.0.1"),
 		~oscReceivePort
 	);
@@ -1067,6 +1079,7 @@ s.waitForBoot({
 			{
 				arg msg;
 				~controlBussesSatGains.setAt(i-1,~dB_to_factor.value(msg[1]));
+				~oscSendNetAddr.sendMsg(("/akMserver/ack/sat"++i++"/gain").asSymbol,msg[1]);
 			},
 			("sat"++i++"/gain").asSymbol,
 			NetAddr("127.0.0.1"),
@@ -1083,6 +1096,7 @@ s.waitForBoot({
 			{
 				arg msg;
 				~controlBussesSubGains.setAt(i-1,~dB_to_factor.value(msg[1]));
+				~oscSendNetAddr.sendMsg(("/akMserver/ack/sub"++i++"/gain").asSymbol,msg[1]);
 			},
 			("sub"++i++"/gain").asSymbol,
 			NetAddr("127.0.0.1"),
@@ -1099,10 +1113,13 @@ s.waitForBoot({
 			("sat"++i++"-eq-OSCreceiver").asSymbol, //receiver name
 			{
 				arg msg;
+				var ackArray = Array.fill(~numEQParameters,0);
 				(1..~numEQParameters).do{
 					arg j;
 					~controlBussesSatEQ[speakerId].setAt(j-1,msg[j]);
+					ackArray[j-1] = msg[j];
 				};
+				~oscSendNetAddr.sendMsg(("/akMserver/ack/sat"++i++"/eq").asSymbol,*ackArray);
 			},
 			("sat"++i++"/eq").asSymbol,
 			NetAddr("127.0.0.1"),
@@ -1120,10 +1137,13 @@ s.waitForBoot({
 			("sub"++i++"-eq-OSCreceiver").asSymbol, //receiver name
 			{
 				arg msg;
+				var ackArray = Array.fill(~numEQParameters,0);
 				(1..~numEQParameters).do{
 					arg j;
 					~controlBussesSubEQ[subId].setAt(j-1,msg[j]);
+					ackArray[j-1] = msg[j];
 				};
+				~oscSendNetAddr.sendMsg(("/akMserver/ack/sub"++i++"/eq").asSymbol,*ackArray);
 			},
 			("sub"++i++"/eq").asSymbol,
 			NetAddr("127.0.0.1"),
@@ -1137,6 +1157,7 @@ s.waitForBoot({
 		("serverQuit-OSCreceiver").asSymbol, //receiver name
 		{
 			arg msg;
+			~oscSendNetAddr.sendMsg(("/akMserver/ack/quit").asSymbol,1);
 			s.quit();
 		},
 		("quit").asSymbol,
