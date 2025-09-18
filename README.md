@@ -24,14 +24,12 @@ Pre-release prototype.
 
 aKMServer (file: `akM_spatServer.scd`) is the real‑time spatial audio panning engine of the aKM software system. It receives multi‑channel audio inputs (virtual “sources”), computes per‑speaker gains and time‑of‑flight delays using a custom radius‑limited inverse‑distance power law (kNN‑style) panning, and renders to a multi‑speaker array (satellites + subs). The server includes system gain, per‑speaker gains, multichannel reverb, per‑band filters, and per‑speaker parametric EQ.
 
-Primary control is via OSC and designed to be driven by the companion controller and visualizer application aKMControl, which handles boot, runtime control, and shutdown orchestration.
-
-Repository for aKMControl: `https://github.com/contactlaplanque/akm-control`
+Primary control is via OSC and designed to be driven by the companion controller and visualizer application [aKMControl](https://github.com/contactlaplanque/akm-control), which handles boot, runtime control, and shutdown orchestration.
 
 Current defaults in this prototype:
 
-- Inputs (sources): 32
-- Outputs: 12 satellites + 2 subs (14 total)
+- Inputs (sources): 32 (_Tested up to 64_)
+- Outputs: 12 satellites + 2 subs (14 total) (_Tested up to 64_)
 - Sample rate: 48 kHz
 - OSC listen port: `23446`; ACK/heartbeat target: `127.0.0.1:23444`
 
