@@ -37,7 +37,7 @@ Current defaults in this prototype:
 
 ### Dependencies
 
-- [SuperCollider](https://supercollider.github.io/) (SC) 3.12+ recommended
+- [SuperCollider](https://supercollider.github.io/) (SC) 3.12+ (required)
 - SC3-plugins 3.13.0+ (required)
   - Releases: [HERE](`https://github.com/supercollider/sc3-plugins/releases`)
 - An audio driver capable of exposing sufficient input/output channels
