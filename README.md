@@ -39,7 +39,7 @@ Current defaults in this prototype:
 
 - [SuperCollider](https://supercollider.github.io/) (SC) 3.12+ (required)
 - SC3-plugins 3.13.0+ (required)
-  - Releases: [HERE](`https://github.com/supercollider/sc3-plugins/releases`)
+  - Releases: [HERE](https://github.com/supercollider/sc3-plugins/releases)
 - An audio driver capable of exposing sufficient input/output channels
   - macOS: CoreAudio (audio I/O via JACK Router or Blackhole)
   - Windows: ASIO (audio I/O via JACK Router or VB-Audio-Matrix)
@@ -114,21 +114,21 @@ sclang.exe C:\absolute\path\to\akM_spatServer.scd
 
 High‑level flow:
 
-- For each source (up to 32), a control‑rate panner synth computes per‑speaker gains and time‑of‑flight delays from source position, radius, and exponent.
-- An audio‑rate synth reads the hardware input for that source, applies the computed gains/delays, and splits dry vs. reverb‑send.
+- For each _"virtual"_ audio source, a control‑rate panner synth computes per‑speaker gains and time‑of‑flight delays from source position, radius, and exponent.
+- An audio‑rate synth reads the audio input for that source, applies the computed gains/delays, and splits dry vs. reverb‑send.
 - A multichannel reverb processes the satellites’ pre‑FX bus.
 - A filter stage applies high‑pass on satellites and low‑pass on subs, plus system and per‑speaker gains.
 - Per‑speaker parametric EQs run on each satellite and sub.
 
 Key components:
 
-- Speakers layout: 12 satellites + 2 subs with example 3D positions defined in the script.
-- Per‑source parameters (7): posX, posY, posZ, radius, exponent `a`, delayLevel, reverbMix.
-- Per‑speaker gains: individual dB controls for each satellite and sub.
-- System gain: dB value applied post‑FX.
-- Filters: satellites (RHPF), subs (RLPF), each with `freq` and `rq`.
-- EQ: per speaker, 5 bands (low shelf, 3 peaks, high shelf), 21 parameters.
-- Heartbeat: 1 Hz OSC status ping when running.
+- **Test Speakers layout:** 12 satellites + 2 subs with example 3D positions defined in the script.
+- **Per‑source parameters (7):** posX, posY, posZ, radius, exponent `a`, delayLevel, reverbMix.
+- **Per‑speaker gains:** individual dB controls for each satellite and sub.
+- **System gain:** dB value applied post‑FX.
+- **Filters:** satellites (RHPF), subs (RLPF), each with `freq` and `rq`.
+- **EQ:** per speaker, 5 bands (low shelf, 3 peaks, high shelf), 21 parameters.
+- **Heartbeat:** 1 Hz OSC status ping when running.
 
 <a id="panning-algorithm"></a>
 
@@ -153,7 +153,7 @@ Speaker array constants (layout‑dependent):
 - $c \approx 344\;\text{m/s}$: speed of sound in air.
 - $\boldsymbol{\mu}$: speakers centroid; $R_{\max} > 0$: a characteristic array radius.
 
-1. Select the active neighborhood: the subset of speakers in side the source radius
+#### 1. Select the active neighborhood: the subset of speakers in side the source radius
 
 ```math
 S \;=\; \{\, i \;\mid\; d_i < R \,\}
@@ -162,7 +162,7 @@ S \;=\; \{\, i \;\mid\; d_i < R \,\}
 > [!NOTE]
 > Only indices in $S$ can receive nonzero gain (a radius‑limited, kNN‑style selection where $k$ adapts to geometry).
 
-2. Compute unnormalized inverse‑distance weights
+#### 2. Compute unnormalized inverse‑distance weights
 
 ```math
 w_i \;=\; \frac{\mathbb{1}_{\{i \in S\}}}{d_i^{\,a}} \;=\; \begin{cases}
@@ -171,7 +171,7 @@ w_i \;=\; \frac{\mathbb{1}_{\{i \in S\}}}{d_i^{\,a}} \;=\; \begin{cases}
 \end{cases}
 ```
 
-3. L2 normalization (energy normalization)
+#### 3. L2 normalization (energy normalization)
 
 ```math
 K \;=\; \sqrt{\sum_{j\in S} w_j^{\,2}}\,,\qquad
@@ -186,7 +186,7 @@ g_i \;=\; \begin{cases}
 
 Interpretation: $g_i$ are nonnegative gains that share energy among nearby speakers. Increasing $a$ sharpens localization (more weight to closer speakers). Increasing $R$ includes more speakers in the neighborhood.
 
-4. Time‑of‑flight delays
+#### Time‑of‑flight delays
 
 ```math
 t_i \;=\; \left(\dfrac{d_i}{c}\right)\,L
@@ -194,7 +194,7 @@ t_i \;=\; \left(\dfrac{d_i}{c}\right)\,L
 
 This is the physical propagation time scaled by $L$. In the implementation, the delay unit squares this time (i.e., uses $t_i^{\,2}$) as a practical shaping—keep $L$ small to remain in a perceptually reasonable range.
 
-5. Distance‑to‑array level attenuation
+#### Distance‑to‑array level attenuation
 
 Let $d_{\mathrm{centroid}} = \lVert \mathbf{x} - \boldsymbol{\mu} \rVert$. Define
 
@@ -205,12 +205,12 @@ f\big(d_{\mathrm{centroid}}\big) \;=\; \dfrac{1}{1 + \alpha\,\left(\dfrac{d_{\ma
 
 This monotonically decreasing curve gently reduces the source input level as it moves away from the speaker array centroid. The factor $f$ multiplies the source’s audio before panning.
 
-6. Putting it together (per speaker channel $i$)
+#### Putting it together (per speaker channel $i$)
 
-Let $x_a(t)$ be the source’s input audio signal and $\operatorname{Delay}_{t}(\cdot)$ a delay by $t$ seconds. The dry per‑speaker signal is
+Let $x_a(t)$ be the source’s input audio signal and $D_{t}(\cdot)$ a delay by $t$ seconds. The dry per‑speaker signal is
 
 ```math
-y_i(t) \;=\; g_i\;\operatorname{Delay}_{\,t_i}\!\big(\,x_a(t)\,f(d_{\mathrm{centroid}})\big)
+y_i(t) \;=\; g_i\;D_{\,t_i}\!\big(\,x_a(t)\,f(d_{\mathrm{centroid}})\big)
 ```
 
 The script also creates a parallel reverb send (scaled by a per‑source reverb mix) and then applies system/speaker gains, crossover‑style filters (RHPF for satellites, RLPF for subs), and per‑speaker parametric EQ.
@@ -224,7 +224,7 @@ All endpoints are on `127.0.0.1` by default. The server listens on `:23446` and 
 | Per‑source params | Send      | `/source{i}/params`           | `posX posY posZ radius exponentA delayLevel reverbMix`                                                                                                                                                | `/akMserver/ack/source{i}/params` (echoes 7 values) |
 | System reverb     | Send      | `/system/reverb`              | `decay feedback`                                                                                                                                                                                      | `/akMserver/ack/system/reverb`                      |
 | System gain       | Send      | `/system/gain`                | `dB`                                                                                                                                                                                                  | `/akMserver/ack/system/gain`                        |
-| Filters (sats)    | Send      | `/system/filter/sats`         | `freq rq`                                                                                                                                                                                             | `/akMserver/ack/system/filter/sats`                 |
+| Filters (sats)    | Send      | `/system/filter/sats`         | `freq`                                                                                                                                                                                                | `/akMserver/ack/system/filter/sats`                 |
 | Filters (subs)    | Send      | `/system/filter/subs`         | `freq rq`                                                                                                                                                                                             | `/akMserver/ack/system/filter/subs`                 |
 | Satellite gain    | Send      | `/sat{i}/gain`                | `dB`                                                                                                                                                                                                  | `/akMserver/ack/sat{i}/gain`                        |
 | Sub gain          | Send      | `/sub{i}/gain`                | `dB`                                                                                                                                                                                                  | `/akMserver/ack/sub{i}/gain`                        |
