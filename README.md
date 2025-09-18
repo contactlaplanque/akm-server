@@ -186,7 +186,7 @@ g_i \;=\; \begin{cases}
 
 Interpretation: $g_i$ are nonnegative gains that share energy among nearby speakers. Increasing $a$ sharpens localization (more weight to closer speakers). Increasing $R$ includes more speakers in the neighborhood.
 
-#### Time‑of‑flight delays
+#### 4. Time‑of‑flight delays
 
 ```math
 t_i \;=\; \left(\dfrac{d_i}{c}\right)\,L
@@ -194,7 +194,7 @@ t_i \;=\; \left(\dfrac{d_i}{c}\right)\,L
 
 This is the physical propagation time scaled by $L$. In the implementation, the delay unit squares this time (i.e., uses $t_i^{\,2}$) as a practical shaping—keep $L$ small to remain in a perceptually reasonable range.
 
-#### Distance‑to‑array level attenuation
+#### 5. Distance‑to‑array level attenuation
 
 Let $d_{\mathrm{centroid}} = \lVert \mathbf{x} - \boldsymbol{\mu} \rVert$. Define
 
@@ -205,7 +205,7 @@ f\big(d_{\mathrm{centroid}}\big) \;=\; \dfrac{1}{1 + \alpha\,\left(\dfrac{d_{\ma
 
 This monotonically decreasing curve gently reduces the source input level as it moves away from the speaker array centroid. The factor $f$ multiplies the source’s audio before panning.
 
-#### Putting it together (per speaker channel $i$)
+#### 6. Putting it together (per speaker channel $i$)
 
 Let $x_a(t)$ be the source’s input audio signal and $D_{t}(\cdot)$ a delay by $t$ seconds. The dry per‑speaker signal is
 
