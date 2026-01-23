@@ -22,7 +22,7 @@ pkgs.dockerTools.buildImage {
   name = "yassinsiouda/akm-server";
   tag = "latest";
   config = {
-    Cmd = [ "${startScript}/bin/start-services" ];
+    Cmd = [ "${pkgs.bash}/bin/bash" "${startScript}/bin/start-services" ];
     Env = [
       "XDG_RUNTIME_DIR=/run/user/1000"
       "PIPEWIRE_RUNTIME_DIR=/run/user/1000"
