@@ -11,6 +11,7 @@ Pre-release prototype.
 ## Table of Contents
 
 - [Overview / Presentation](#overview)
+- [Quickstart](#quickstart)
 - [Installation](#installation)
 - [Usage](#usage)
 - [How it Works](#how-it-works)
@@ -32,6 +33,17 @@ Current defaults in this prototype:
 - Outputs: 12 satellites + 2 subs (14 total) (_Tested up to 64_)
 - Sample rate: 48 kHz
 - OSC listen port: `23446`; ACK/heartbeat target: `127.0.0.1:23444`
+
+## Quickstart
+
+Start the akm-server with docker 
+
+``` bash
+docker compose up
+```
+
+Osc server is ready on adress `localhost:23446`
+
 
 ## Installation
 

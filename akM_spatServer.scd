@@ -217,13 +217,13 @@ s.options.numInputBusChannels = ~numSources;
 
 //This function finds the max distance between the centroid and the speakers
 // -> NOT USED AT THE MOMENT
-~max_radius = {
+/*~max_radius = {
 	arg points;
 	var radiuses, val, index, center = ~centroid.value(points);
 	radiuses = points.collect({ |p| ~distance.value([0,0,0],p - center) });
 	# val, index = ArrayMax.kr(radiuses);
 	val;
-};
+};*/
 
 ~dB_to_factor = {
 	arg val;
