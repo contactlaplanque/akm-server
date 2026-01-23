@@ -1,0 +1,19 @@
+services:
+  akm-server:
+    image: yassinsiouda/akm-server:latest
+    devices:
+      - /dev/snd:/dev/snd
+    privileged: true
+    environment:
+      - DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
+      - XDG_RUNTIME_DIR=/run/user/1000
+    volumes:
+      #- ./server.scd:/server.scd
+      - /run/user/1000/bus:/run/user/1000/bus:ro
+      - /run/user/1000:/run/user/1000:ro
+    cap_add:
+      - SYS_NICE
+    ports:
+      - "57110:57110"
+      - "23446:23446"
+      - "23444:23444"
