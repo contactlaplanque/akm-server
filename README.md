@@ -39,8 +39,15 @@ Current defaults in this prototype:
 Start the akm-server with docker 
 
 ``` bash
+docker run  --privileged --device /dev/snd:/dev/snd -e DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus -e XDG_RUNTIME_DIR=/run/user/1000 -v /run/user/1000/bus:/run/user/1000/bus:ro -v /run/user/1000:/run/user/1000:ro --cap-add SYS_NICE -p 57110:57110 -p 23446:23446 -p 23444:23444 yassinsiouda/akm-server:latest
+```
+
+Or using docker compose file in repo
+
+``` bash
 docker compose up
 ```
+
 
 Osc server is ready on adress `localhost:23446`
 
