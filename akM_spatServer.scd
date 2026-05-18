@@ -45,7 +45,7 @@ s.options.maxNodes = 1024 * 32;
 
 //s.options.inDevice = "VB-Matrix VASIO-64A";
 //s.options.outDevice = "VB-Matrix VASIO-64A";
-s.options.device = "JackRouter";
+s.options.device = "BlackHole 64ch";
 s.options.sampleRate = 48000;
 
 s.options.safetyClipThreshold = 1;
