@@ -59,7 +59,11 @@ sourceInputChannels = server.at(\sources).collect({ |src| src.at(\inputChannel).
 
 ~soundSpeedInAir = if(layout.at(\panning).at(\soundSpeed).notNil) { layout.at(\panning).at(\soundSpeed).asFloat } { 344.0 };
 ~numSourceParameters = 7;
-~numEQParameters = 21;
+// Group-EQ wire/bus layout (v3): [eqOn, p1_on, p1_freq, p1_gainDb, p1_rq,
+// p2_on, p2_freq, p2_gainDb, p2_rq, p3_on, p3_freq, p3_gainDb, p3_rq].
+// Shelves were dropped; the per-role group filter (RHPF/RLPF) handles
+// the broad shaping that the shelves used to do.
+~numEQParameters = 13;
 
 ~oscReceivePort = server.at(\osc).at(\listen).at(\port).asInteger;
 ~oscReceiveHost = server.at(\osc).at(\listen).at(\host).asString;

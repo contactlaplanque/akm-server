@@ -8,9 +8,11 @@ var encodeEqStateForBus;
 s.freeAll;
 s.newBusAllocators;
 
-// Convert a saved EQ state event (matching the frontend EqState shape) to the
-// 21-float layout expected by the group EQ bus. Falls back to `defaults` per
-// slot if any field is missing.
+// Convert a saved EQ state event (matching the frontend EqState shape) to
+// the 13-float v3 layout expected by the group EQ bus. Any lowShelf /
+// highShelf fields a saved-state file may still carry from the pre-v3 5-band
+// EQ are ignored silently for backward compatibility. Falls back to
+// `defaults` per slot if a field is missing.
 encodeEqStateForBus = { |eq, defaults|
 	var pick, band;
 	if(eq.isNil) {
@@ -29,11 +31,9 @@ encodeEqStateForBus = { |eq, defaults|
 			]
 		};
 		[pick.value(eq, \enabled, defaults[0])]
-			++ band.value(\lowShelf, 1)
-			++ band.value(\peak1, 5)
-			++ band.value(\peak2, 9)
-			++ band.value(\peak3, 13)
-			++ band.value(\highShelf, 17)
+			++ band.value(\peak1, 1)
+			++ band.value(\peak2, 5)
+			++ band.value(\peak3, 9)
 	}
 };
 
@@ -98,13 +98,9 @@ encodeEqStateForBus = { |eq, defaults|
 // synth taps it (instead of using SendPeakRMS which interleaves peak/rms).
 ~audioBusMetersSpeakerOuts = Bus.audio(s, ~numOutputs);
 
-satEqDefaults = [
-	0, 0, 400, 0, 1,
-	0, 2000, 0, 1,
-	0, 6000, 0, 1,
-	0, 12000, 0, 1,
-	0, 16000, 0, 1
-];
+// v3 group-EQ defaults: eq enabled + three parametric peaks.
+// Format: [eqOn, p1_on, p1_freq, p1_gainDb, p1_rq, p2_on, p2_freq, p2_gainDb, p2_rq, p3_on, p3_freq, p3_gainDb, p3_rq]
+satEqDefaults = [1, 1, 250, 0, 1, 1, 1000, 0, 1, 1, 4000, 0, 1];
 subEqDefaults = satEqDefaults.copy;
 
 // `state` block in server.json is optional; when present we use it to hydrate

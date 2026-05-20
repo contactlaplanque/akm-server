@@ -13,8 +13,10 @@ Realtime spatial audio server for the akM toolchain, built with SuperCollider.
 - `lib/03_synthdefs.scd` (DSP graph definitions)
 - `lib/04_groups.scd` (execution order)
 - `lib/05_synths.scd` (instance creation)
-- `lib/06_osc.scd` (OSC API v2 + ACK + heartbeat + state/meter output)
+- `lib/06_osc.scd` (OSC API v3: setters + heartbeat + perf + meters + 20 Hz change-driven `/state/*` + `/event/*`)
 - `lib/07_util.scd` (helpers)
+
+> **v3 migration note** — the group EQ went from 5 bands to 3 parametric peaks (no shelves; the per-role group filter handles broad shaping). Any `lowShelf` / `highShelf` blocks in `packages/akm-config/venues/main/server.json` are ignored on load and stripped on the next save. If you relied on shelves, fold their effect into the group filter or the peaks before upgrading. See `packages/akm-config/docs/osc.md` for the v3 OSC API.
 
 The legacy monolithic script `akM_spatServer.scd` is kept as historical reference only.
 

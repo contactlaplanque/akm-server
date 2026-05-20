@@ -200,6 +200,11 @@ SynthDef(\satReverbFX, {
 	fbk = OnePole.ar(fbk, 0.2);
 	fbk = fbk + signals;
 	7.do({ fbk = AllpassN.ar(fbk, 0.05, satAllpassDelays, decay) });
+	// LeakDC stops any DC offset introduced by upstream biquad transients
+	// (EQ parameter jumps) from accumulating inside this feedback loop.
+	// Without it, a single bad coefficient set can ring forever as
+	// "growing distortion" while audio CPU stays flat.
+	fbk = LeakDC.ar(fbk, 0.995);
 	LocalOut.ar(fbk * feedback);
 	Out.ar(busSatPost, fbk);
 }).add;
@@ -222,62 +227,99 @@ SynthDef(\subMidReverbFX, {
 	fbk = OnePole.ar(fbk, 0.2);
 	fbk = fbk + signals;
 	5.do({ fbk = AllpassN.ar(fbk, 0.05, subMidAllpassDelays, decay) });
+	// See satReverbFX for why LeakDC is here.
+	fbk = LeakDC.ar(fbk, 0.995);
 	LocalOut.ar(fbk * feedback);
 	Out.ar(busSubMidPost, fbk);
 }).add;
 
+// Group filter + 3-band parametric EQ. v3 layout: eqOn at [0], then
+// (enabled, freq, gainDb, rq) at offsets [1..4], [5..8], [9..12].
+// All freq/db/rq inputs and the upstream filter cutoff/rq are smoothed
+// with .lag(0.05). Without lag, BPeakEQ / RHPF / RLPF re-derive their
+// biquad coefficients every control block straight from the bus, so a
+// 60 Hz slider drag is heard as zipper noise and, at extreme settings,
+// transient instabilities that the satellite reverb feedback loop then
+// stretches into "growing distortion".
 SynthDef(\groupSatFilterEq, {
-	var dry, wet, sig, filterParams, eqParams, eqOn, signal;
+	var dry, wet, sig, filterParams, eqParams, eqOn, fFreq, fRq, signal;
 	dry = In.ar(busSatDry, numSatellites);
 	wet = In.ar(busSatPost, numSatellites);
 	filterParams = In.kr(satFilterBus, 2);
 	eqParams = In.kr(satEqBus, numEqParams);
 	eqOn = eqParams[0];
+	fFreq = filterParams[0].lag(0.05);
+	fRq = filterParams[1].lag(0.05);
 
 	sig = (dry + wet).collect({ |ch|
-		signal = RHPF.ar(ch, filterParams[0], filterParams[1]);
-		signal = BLowShelf.ar(signal, freq: eqParams[2], rs: eqParams[4], db: eqOn * eqParams[1] * eqParams[3]);
-		signal = BPeakEQ.ar(signal, freq: eqParams[6], rq: eqParams[8], db: eqOn * eqParams[5] * eqParams[7]);
-		signal = BPeakEQ.ar(signal, freq: eqParams[10], rq: eqParams[12], db: eqOn * eqParams[9] * eqParams[11]);
-		signal = BPeakEQ.ar(signal, freq: eqParams[14], rq: eqParams[16], db: eqOn * eqParams[13] * eqParams[15]);
-		BHiShelf.ar(signal, freq: eqParams[18], rs: eqParams[20], db: eqOn * eqParams[17] * eqParams[19]);
+		signal = RHPF.ar(ch, fFreq, fRq);
+		signal = BPeakEQ.ar(signal,
+			freq: eqParams[2].lag(0.05),
+			rq:   eqParams[4].lag(0.05),
+			db:   (eqOn * eqParams[1] * eqParams[3]).lag(0.05));
+		signal = BPeakEQ.ar(signal,
+			freq: eqParams[6].lag(0.05),
+			rq:   eqParams[8].lag(0.05),
+			db:   (eqOn * eqParams[5] * eqParams[7]).lag(0.05));
+		BPeakEQ.ar(signal,
+			freq: eqParams[10].lag(0.05),
+			rq:   eqParams[12].lag(0.05),
+			db:   (eqOn * eqParams[9] * eqParams[11]).lag(0.05));
 	});
 	Out.ar(busSatProcessed, sig);
 }).add;
 
 SynthDef(\groupSubMidFilterEq, {
-	var dry, wet, sig, filterParams, eqParams, eqOn, signal;
+	var dry, wet, sig, filterParams, eqParams, eqOn, fFreq, fRq, signal;
 	dry = In.ar(busSubMidDry, numSubMid);
 	wet = In.ar(busSubMidPost, numSubMid);
 	filterParams = In.kr(subMidFilterBus, 2);
 	eqParams = In.kr(subMidEqBus, numEqParams);
 	eqOn = eqParams[0];
+	fFreq = filterParams[0].lag(0.05);
+	fRq = filterParams[1].lag(0.05);
 
 	sig = (dry + wet).collect({ |ch|
-		signal = RLPF.ar(ch, filterParams[0], filterParams[1]);
-		signal = BLowShelf.ar(signal, freq: eqParams[2], rs: eqParams[4], db: eqOn * eqParams[1] * eqParams[3]);
-		signal = BPeakEQ.ar(signal, freq: eqParams[6], rq: eqParams[8], db: eqOn * eqParams[5] * eqParams[7]);
-		signal = BPeakEQ.ar(signal, freq: eqParams[10], rq: eqParams[12], db: eqOn * eqParams[9] * eqParams[11]);
-		signal = BPeakEQ.ar(signal, freq: eqParams[14], rq: eqParams[16], db: eqOn * eqParams[13] * eqParams[15]);
-		BHiShelf.ar(signal, freq: eqParams[18], rs: eqParams[20], db: eqOn * eqParams[17] * eqParams[19]);
+		signal = RLPF.ar(ch, fFreq, fRq);
+		signal = BPeakEQ.ar(signal,
+			freq: eqParams[2].lag(0.05),
+			rq:   eqParams[4].lag(0.05),
+			db:   (eqOn * eqParams[1] * eqParams[3]).lag(0.05));
+		signal = BPeakEQ.ar(signal,
+			freq: eqParams[6].lag(0.05),
+			rq:   eqParams[8].lag(0.05),
+			db:   (eqOn * eqParams[5] * eqParams[7]).lag(0.05));
+		BPeakEQ.ar(signal,
+			freq: eqParams[10].lag(0.05),
+			rq:   eqParams[12].lag(0.05),
+			db:   (eqOn * eqParams[9] * eqParams[11]).lag(0.05));
 	});
 	Out.ar(busSubMidProcessed, sig);
 }).add;
 
 SynthDef(\groupSubLfFilterEq, {
-	var dry, sig, filterParams, eqParams, eqOn, signal;
+	var dry, sig, filterParams, eqParams, eqOn, fFreq, fRq, signal;
 	dry = In.ar(busSubLfDry, numSubLf);
 	filterParams = In.kr(subLfFilterBus, 2);
 	eqParams = In.kr(subLfEqBus, numEqParams);
 	eqOn = eqParams[0];
+	fFreq = filterParams[0].lag(0.05);
+	fRq = filterParams[1].lag(0.05);
 
 	sig = dry.collect({ |ch|
-		signal = RLPF.ar(ch, filterParams[0], filterParams[1]);
-		signal = BLowShelf.ar(signal, freq: eqParams[2], rs: eqParams[4], db: eqOn * eqParams[1] * eqParams[3]);
-		signal = BPeakEQ.ar(signal, freq: eqParams[6], rq: eqParams[8], db: eqOn * eqParams[5] * eqParams[7]);
-		signal = BPeakEQ.ar(signal, freq: eqParams[10], rq: eqParams[12], db: eqOn * eqParams[9] * eqParams[11]);
-		signal = BPeakEQ.ar(signal, freq: eqParams[14], rq: eqParams[16], db: eqOn * eqParams[13] * eqParams[15]);
-		BHiShelf.ar(signal, freq: eqParams[18], rs: eqParams[20], db: eqOn * eqParams[17] * eqParams[19]);
+		signal = RLPF.ar(ch, fFreq, fRq);
+		signal = BPeakEQ.ar(signal,
+			freq: eqParams[2].lag(0.05),
+			rq:   eqParams[4].lag(0.05),
+			db:   (eqOn * eqParams[1] * eqParams[3]).lag(0.05));
+		signal = BPeakEQ.ar(signal,
+			freq: eqParams[6].lag(0.05),
+			rq:   eqParams[8].lag(0.05),
+			db:   (eqOn * eqParams[5] * eqParams[7]).lag(0.05));
+		BPeakEQ.ar(signal,
+			freq: eqParams[10].lag(0.05),
+			rq:   eqParams[12].lag(0.05),
+			db:   (eqOn * eqParams[9] * eqParams[11]).lag(0.05));
 	});
 	Out.ar(busSubLfProcessed, sig);
 }).add;
