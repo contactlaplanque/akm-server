@@ -5,10 +5,12 @@ var subLfX, subLfY, subLfZ, subLfOutCh;
 var centroidX, centroidY, centroidZ, satMaxRadius, cSoundSpeed;
 var numSatellites, numSubMid, numSubLf, numOutputs, numSources, numSourceParams, numEqParams;
 var satFilterBus, satEqBus, subMidFilterBus, subMidEqBus, subLfFilterBus, subLfEqBus;
-var sysReverbBus, subMidReverbBus, sysGainBus, speakerGainsBus;
+var sysReverbBus, subMidReverbBus, sysGainBus, speakerGainsBus, speakerMutesBus, groupGainsBus;
 var busSatDry, busSatPre, busSatPost, busSatProcessed;
 var busSubMidDry, busSubMidPre, busSubMidPost, busSubMidProcessed;
 var busSubLfDry, busSubLfProcessed;
+var busMetersSpeakerOuts;
+var sourceInputChannels;
 var metersHz, satAllpassDelays, subMidAllpassDelays;
 
 "[AKM] adding SynthDefs...".postln;
@@ -38,8 +40,10 @@ numSatellites = ~numSatellites;
 numSubMid = ~numSubMid;
 numSubLf = ~numSubLf;
 numOutputs = ~numOutputs;
+numSources = ~numSources;
 numSourceParams = ~numSourceParameters;
 numEqParams = ~numEQParameters;
+sourceInputChannels = ~sourceInputChannels;
 
 satFilterBus = ~controlBusGroupFilter[\satellite].index;
 satEqBus = ~controlBusGroupEq[\satellite].index;
@@ -52,6 +56,8 @@ sysReverbBus = ~controlBusSystemReverb.index;
 subMidReverbBus = ~controlBusSubMidReverb.index;
 sysGainBus = ~controlBusSystemGain.index;
 speakerGainsBus = ~controlBusSpeakerGains.index;
+speakerMutesBus = ~controlBusSpeakerMutes.index;
+groupGainsBus = ~controlBusGroupGains.index;
 
 busSatDry = ~audioBusSatDry.index;
 busSatPre = ~audioBusSatPre.index;
@@ -63,6 +69,7 @@ busSubMidPost = ~audioBusSubMidPost.index;
 busSubMidProcessed = ~audioBusSubMidProcessed.index;
 busSubLfDry = ~audioBusSubLfDry.index;
 busSubLfProcessed = ~audioBusSubLfProcessed.index;
+busMetersSpeakerOuts = ~audioBusMetersSpeakerOuts.index;
 
 metersHz = ~telemetryMetersHz;
 satAllpassDelays = { 0.050.rand } ! numSatellites;
@@ -108,9 +115,10 @@ SynthDef(\spatPannerSource, {
 	});
 	subLfWeights = subLfDist.collect({ |d| d.pow(exponentA.neg) });
 	subLfNorm = (subLfWeights.collect({ |w| w.squared }).sum + 1e-9).sqrt.reciprocal;
-	subLfGains = Array.fill(numSubLf, { |i|
-		(subLfWeights[i] * subLfNorm) * (subLfDist[i] < sourceRadius)
-	});
+	// sub_lf: no radius gate — all sources always feed into LF subs.
+	// Distance-based attenuation still applies via the shared `attenuation` bus
+	// (computed below from the satellite centroid / maxRadius).
+	subLfGains = Array.fill(numSubLf, { |i| subLfWeights[i] * subLfNorm });
 	subLfDelays = subLfDist.collect({ |d| (d / cSoundSpeed) * delayLevel });
 
 	distToCenter = ((posX - centroidX).squared + (posY - centroidY).squared + (posZ - centroidZ).squared).sqrt;
@@ -275,25 +283,63 @@ SynthDef(\groupSubLfFilterEq, {
 }).add;
 
 SynthDef(\outputRouter, {
-	var satSig, subMidSig, subLfSig, speakerGains, systemGain, allSignals;
+	var satSig, subMidSig, subLfSig, speakerGains, speakerMutes, groupGains, systemGain;
+	var satFinal, subMidFinal, subLfFinal;
 	satSig = In.ar(busSatProcessed, numSatellites);
 	subMidSig = In.ar(busSubMidProcessed, numSubMid);
 	subLfSig = In.ar(busSubLfProcessed, numSubLf);
 	speakerGains = In.kr(speakerGainsBus, numOutputs);
+	// Per-speaker mute: 1.0 mutes, 0.0 passes through. Multiplied as (1 - mute)
+	// so the bus is naturally 0.0 = unmuted at boot.
+	speakerMutes = In.kr(speakerMutesBus, numOutputs);
+	// Per-group gain in linear factor. Slot 0=sat, 1=sub_mid, 2=sub_lf.
+	groupGains = In.kr(groupGainsBus, 3);
 	systemGain = In.kr(sysGainBus, 1);
 
-	allSignals = (satSig ++ subMidSig ++ subLfSig);
-	SendPeakRMS.ar(allSignals, replyRate: metersHz, peakLag: 3, cmdName: '/akm/server/meters/raw');
+	satFinal = Array.fill(numSatellites, { |i|
+		satSig[i] * groupGains[0] * speakerGains[i] * (1 - speakerMutes[i]) * systemGain
+	});
+	subMidFinal = Array.fill(numSubMid, { |i|
+		subMidSig[i] * groupGains[1] * speakerGains[i + numSatellites] * (1 - speakerMutes[i + numSatellites]) * systemGain
+	});
+	subLfFinal = Array.fill(numSubLf, { |i|
+		subLfSig[i] * groupGains[2] * speakerGains[i + numSatellites + numSubMid] * (1 - speakerMutes[i + numSatellites + numSubMid]) * systemGain
+	});
 
-	Array.fill(numSatellites, { |i|
-		Out.ar(satOutCh[i], satSig[i] * speakerGains[i] * systemGain)
-	});
-	Array.fill(numSubMid, { |i|
-		Out.ar(subMidOutCh[i], subMidSig[i] * speakerGains[i + numSatellites] * systemGain)
-	});
-	Array.fill(numSubLf, { |i|
-		Out.ar(subLfOutCh[i], subLfSig[i] * speakerGains[i + numSatellites + numSubMid] * systemGain)
-	});
+	// Per-speaker output: route each to the configured `outputChannel`.
+	Array.fill(numSatellites, { |i| Out.ar(satOutCh[i], satFinal[i]) });
+	Array.fill(numSubMid, { |i| Out.ar(subMidOutCh[i], subMidFinal[i]) });
+	Array.fill(numSubLf, { |i| Out.ar(subLfOutCh[i], subLfFinal[i]) });
+
+	// Speaker output meters reflect the signal that actually leaves each bus
+	// (post per-speaker gain and post system gain). Write each speaker's
+	// signal into the meter bus AT its outputChannel index, so the browser
+	// can index `meters.speakerOuts[outputChannel]` directly regardless of
+	// the layout's speaker ordering.
+	Array.fill(numSatellites, { |i| Out.ar(busMetersSpeakerOuts + satOutCh[i], satFinal[i]) });
+	Array.fill(numSubMid, { |i| Out.ar(busMetersSpeakerOuts + subMidOutCh[i], subMidFinal[i]) });
+	Array.fill(numSubLf, { |i| Out.ar(busMetersSpeakerOuts + subLfOutCh[i], subLfFinal[i]) });
+}).add;
+
+// Dedicated meter synth: reads source inputs from SoundIn and speaker outputs
+// from a shared meter bus (filled by outputRouter), computes amplitudes, and
+// sends a single OSC reply per tick with the concatenated array
+// `[sourceIns..., speakerOuts...]`. SendReply omits the interleaved RMS that
+// SendPeakRMS would add, so the browser can index by channel directly.
+SynthDef(\meters, {
+	var srcAudio, spkAudio, srcAmps, spkAmps, lag = 0.1;
+	// Use the configured input channel mapping so srcAmps[i] aligns with the
+	// browser's `sources[i].inputChannel` regardless of how the server.json
+	// orders channels.
+	srcAudio = SoundIn.ar(sourceInputChannels);
+	spkAudio = In.ar(busMetersSpeakerOuts, numOutputs);
+	srcAmps = Amplitude.kr(srcAudio, attackTime: 0.01, releaseTime: lag);
+	spkAmps = Amplitude.kr(spkAudio, attackTime: 0.01, releaseTime: lag);
+	SendReply.kr(
+		Impulse.kr(metersHz),
+		'/akm/server/meters/raw',
+		srcAmps ++ spkAmps
+	);
 }).add;
 
 s.sync;

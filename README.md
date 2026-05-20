@@ -31,6 +31,27 @@ Launch command from repository root:
 sclang "akm-server/bootstrap.scd" -- "packages/akm-config/venues/main/layout.json" "packages/akm-config/venues/main/server.json"
 ```
 
+## Local OSC smoke test
+
+From repository root:
+
+```bash
+pnpm run test:osc-smoke
+```
+
+What it checks:
+
+- server reaches `AKM SERVER READY`
+- ACK round-trips for core OSC endpoints
+- at least one heartbeat + source state packet is received
+- `/akm/server/quit` returns ACK and exits cleanly
+
+Troubleshooting:
+
+- Ensure SuperCollider is installed and `sclang` is available at `/Applications/SuperCollider.app/Contents/MacOS/sclang` or override with `AKM_SCLANG_BIN`.
+- If ports are in use, set `AKM_SERVER_CONFIG_PATH` to a config with free OSC listen/reply ports.
+- Use `AKM_SMOKE_VERBOSE=1` to print all OSC send/receive traffic during the test.
+
 ## Speaker model (default venue)
 
 - 36 satellites (`satellite`)

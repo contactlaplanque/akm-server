@@ -45,6 +45,10 @@
 ~subLfFilterEqSynth = Synth.tail(~filtersEqGroup, \groupSubLfFilterEq);
 
 ~outputRouterSynth = Synth.tail(~outputGroup, \outputRouter);
+// `\meters` taps both the source inputs (via SoundIn) and the post-gain
+// speaker outputs (via the shared meter bus). It must run after the router so
+// the meter bus reflects the current block's speaker output.
+~metersSynth = Synth.tail(~outputGroup, \meters);
 
 s.sync;
 "[AKM] synth instances ready.".postln;

@@ -36,6 +36,7 @@ s.waitForBoot({
 
 	"--------------------------------------------------------".postln;
 	"AKM SERVER READY".postln;
+	~oscSendNetAddr.sendMsg("/akm/server/ready", 1);
 	"--------------------------------------------------------".postln;
 });
 )

@@ -67,6 +67,9 @@ sourceInputChannels = server.at(\sources).collect({ |src| src.at(\inputChannel).
 
 ~telemetryStateHz = server.at(\telemetry).at(\stateBroadcastHz).asFloat.clip(1, 60);
 ~telemetryMetersHz = server.at(\telemetry).at(\metersHz).asFloat.clip(1, 60);
+~telemetryPerfHz = if(server.at(\telemetry).at(\perfHz).notNil) {
+	server.at(\telemetry).at(\perfHz).asFloat.clip(1, 10)
+} { 3.0 };
 
 satPositions = ~satellites.collect({ |sp| sp[\position] });
 ~satCentroid = {
