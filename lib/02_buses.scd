@@ -58,6 +58,18 @@ encodeEqStateForBus = { |eq, defaults|
 	~controlBussesAttenuation[key] = Bus.control(s, 1);
 });
 
+// Seed the per-source input buses BEFORE synths are added in 05_synths.scd.
+// Layout matches `\spatPannerSource`'s In.kr(sourceInputBus, ~numSourceParameters):
+//   [posX, posY, posZ, radius, exponentA, delayLevel, reverbMix]
+// Doing this here (rather than in 06_osc.scd) means \inputAudioProcessor reads
+// the steady-state `delayLevel = 1.0` on first audio block, which together
+// with the .lag(0.05) on satDelays/subMidDelays/subLfDelays eliminates the
+// boot-time click.
+~sourceDefaults = [0.0, 0.0, 1.7, 3.0, 1.0, 1.0, 0.2];
+~sourceIds.do({ |sourceId|
+	~controlBussesInputs[sourceId.asSymbol].setn(~sourceDefaults);
+});
+
 ~controlBusGroupEq = (
 	satellite: Bus.control(s, ~numEQParameters),
 	sub_mid: Bus.control(s, ~numEQParameters),

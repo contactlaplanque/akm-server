@@ -1,15 +1,10 @@
 (
-var sourceDefaults;
-
 "[AKM] creating OSC I/O...".postln;
 
-sourceDefaults = [0.0, 0.0, 1.7, 3.0, 1.0, 1.0, 0.2];
-
-~sourceIds.do({ |sourceId|
-	~controlBussesInputs[sourceId.asSymbol].setn(sourceDefaults);
-});
-// Group EQ/filter/system buses are seeded in 02_buses.scd (optionally from
-// `state` in server.json). Don't overwrite them here.
+// Per-source input buses are seeded in 02_buses.scd (so the synths see the
+// steady-state `delayLevel = 1.0` on first audio block). Group EQ/filter/
+// system buses are likewise seeded there (optionally from `state` in
+// server.json). Nothing to initialise here.
 
 // ---------------------------------------------------------------------------
 // v3 OSC API surface (SC -> agent -> UI)

@@ -11,7 +11,7 @@ var busSubMidDry, busSubMidPre, busSubMidPost, busSubMidProcessed;
 var busSubLfDry, busSubLfProcessed;
 var busMetersSpeakerOuts;
 var sourceInputChannels;
-var metersHz, satAllpassDelays, subMidAllpassDelays;
+var metersHz;
 
 "[AKM] adding SynthDefs...".postln;
 
@@ -72,8 +72,6 @@ busSubLfProcessed = ~audioBusSubLfProcessed.index;
 busMetersSpeakerOuts = ~audioBusMetersSpeakerOuts.index;
 
 metersHz = ~telemetryMetersHz;
-satAllpassDelays = { 0.050.rand } ! numSatellites;
-subMidAllpassDelays = { 0.050.rand } ! numSubMid;
 
 SynthDef(\spatPannerSource, {
 	|sourceInputBus=0, satGainBus=0, satDelayBus=0, subMidGainBus=0, subMidDelayBus=0, subLfGainBus=0, subLfDelayBus=0, attenuationBus=0|
@@ -147,7 +145,10 @@ SynthDef(\inputAudioProcessor, {
 	attenuation = In.kr(attenuationBus, 1);
 
 	satGains = In.kr(satGainBus, numSatellites);
-	satDelays = In.kr(satDelayBus, numSatellites);
+	// .lag(0.05) smooths the per-channel delay-time bus so DelayC.ar's
+	// interpolated read doesn't click on instantaneous steps (boot-time
+	// `delayLevel` 0->1, fast source moves, large slider jumps).
+	satDelays = In.kr(satDelayBus, numSatellites).lag(0.05);
 	satDry = Array.fill(numSatellites, { |i|
 		DelayC.ar(
 			in: satGains[i] * audioIn * attenuation,
@@ -158,7 +159,7 @@ SynthDef(\inputAudioProcessor, {
 	satWet = satDry * reverbMix;
 
 	subMidGains = In.kr(subMidGainBus, numSubMid);
-	subMidDelays = In.kr(subMidDelayBus, numSubMid);
+	subMidDelays = In.kr(subMidDelayBus, numSubMid).lag(0.05);
 	subMidDry = Array.fill(numSubMid, { |i|
 		DelayC.ar(
 			in: subMidGains[i] * audioIn * attenuation,
@@ -169,7 +170,7 @@ SynthDef(\inputAudioProcessor, {
 	subMidWet = subMidDry * reverbMix;
 
 	subLfGains = In.kr(subLfGainBus, numSubLf);
-	subLfDelays = In.kr(subLfDelayBus, numSubLf);
+	subLfDelays = In.kr(subLfDelayBus, numSubLf).lag(0.05);
 	subLfDry = Array.fill(numSubLf, { |i|
 		DelayC.ar(
 			in: subLfGains[i] * audioIn * attenuation,
@@ -193,13 +194,18 @@ SynthDef(\satReverbFX, {
 
 	signals = In.ar(busSatPre, numSatellites);
 	signals = OnePole.ar(signals, 0.72);
-	signals = AllpassC.ar(signals, 0.3, LFNoise1.kr(1).range(0.03, 0.029), 3);
+	signals = AllpassC.ar(signals, 0.3, LFNoise1.kr(1).range(0.3, 0.29), 3);
 
 	fbk = LocalIn.ar(numSatellites);
 	if(numSatellites > 1) { fbk = fbk.scramble };
 	fbk = OnePole.ar(fbk, 0.2);
 	fbk = fbk + signals;
-	7.do({ fbk = AllpassN.ar(fbk, 0.05, satAllpassDelays, decay) });
+	// Generate fresh, decorrelated random delays per cascade stage so the
+	// allpass chain behaves as a Schroeder diffuser instead of a coherent
+	// comb filter. Reusing the same delay array across all 7 iterations (a
+	// post-refactor regression) let energy stack up in the feedback loop
+	// and produced the "growing distortion" symptom.
+	7.do({ fbk = AllpassN.ar(fbk, 0.05, { 0.050.rand } ! numSatellites, decay) });
 	// LeakDC stops any DC offset introduced by upstream biquad transients
 	// (EQ parameter jumps) from accumulating inside this feedback loop.
 	// Without it, a single bad coefficient set can ring forever as
@@ -220,13 +226,16 @@ SynthDef(\subMidReverbFX, {
 
 	signals = In.ar(busSubMidPre, numSubMid) * enabled * mix;
 	signals = OnePole.ar(signals, 0.72);
-	signals = AllpassC.ar(signals, 0.3, LFNoise1.kr(1).range(0.03, 0.029), 2);
+	signals = AllpassC.ar(signals, 0.3, LFNoise1.kr(1).range(0.3, 0.29), 2);
 
 	fbk = LocalIn.ar(numSubMid);
 	if(numSubMid > 1) { fbk = fbk.scramble };
 	fbk = OnePole.ar(fbk, 0.2);
 	fbk = fbk + signals;
-	5.do({ fbk = AllpassN.ar(fbk, 0.05, subMidAllpassDelays, decay) });
+	// Same Schroeder-diffuser fix as in \satReverbFX: fresh random delays
+	// per cascade stage prevent the allpass chain from acting as a coherent
+	// comb filter inside the feedback path.
+	5.do({ fbk = AllpassN.ar(fbk, 0.05, { 0.050.rand } ! numSubMid, decay) });
 	// See satReverbFX for why LeakDC is here.
 	fbk = LeakDC.ar(fbk, 0.995);
 	LocalOut.ar(fbk * feedback);
