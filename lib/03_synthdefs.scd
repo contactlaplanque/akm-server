@@ -12,8 +12,16 @@ var busSubLfDry, busSubLfProcessed;
 var busMetersSpeakerOuts;
 var sourceInputChannels;
 var metersHz;
+// Diagnostic A/B: set true to pass wet buses straight through with no
+// LocalIn/LocalOut feedback. If glitches disappear, the reverb loop is
+// the culprit. Set false (and restart the server) for normal operation.
+var bypassReverbDiag;
+bypassReverbDiag = true;
 
 "[AKM] adding SynthDefs...".postln;
+if(bypassReverbDiag) {
+	"[AKM] DIAG: reverb BYPASSED — sat/sub_mid wet buses pass through unchanged (no feedback). Set bypassReverbDiag = false in lib/03_synthdefs.scd and restart to restore.".postln;
+};
 
 satX = ~satellites.collect({ |sp| sp[\position][0] });
 satY = ~satellites.collect({ |sp| sp[\position][1] });
@@ -93,8 +101,13 @@ SynthDef(\spatPannerSource, {
 	});
 	satWeights = satDist.collect({ |d| d.pow(exponentA.neg) });
 	satNorm = (satWeights.collect({ |w| w.squared }).sum + 1e-9).sqrt.reciprocal;
+	// Soft radius edge (0.15 m) instead of a hard `(dist < radius)` gate. The
+	// hard gate clicked whenever a source crossed the boundary and injected
+	// AM sidebands into the wet bus; in the reverb feedback loop that reads
+	// as distortion that grows while audio is playing.
 	satGains = Array.fill(numSatellites, { |i|
-		(satWeights[i] * satNorm) * (satDist[i] < sourceRadius)
+		var gate = ((sourceRadius - satDist[i]) / (sourceRadius * 0.15 + 0.001)).clip(0, 1);
+		satWeights[i] * satNorm * gate
 	});
 	satDelays = satDist.collect({ |d| (d / cSoundSpeed) * delayLevel });
 
@@ -104,7 +117,8 @@ SynthDef(\spatPannerSource, {
 	subMidWeights = subMidDist.collect({ |d| d.pow(exponentA.neg) });
 	subMidNorm = (subMidWeights.collect({ |w| w.squared }).sum + 1e-9).sqrt.reciprocal;
 	subMidGains = Array.fill(numSubMid, { |i|
-		(subMidWeights[i] * subMidNorm) * (subMidDist[i] < sourceRadius)
+		var gate = ((sourceRadius - subMidDist[i]) / (sourceRadius * 0.15 + 0.001)).clip(0, 1);
+		subMidWeights[i] * subMidNorm * gate
 	});
 	subMidDelays = subMidDist.collect({ |d| (d / cSoundSpeed) * delayLevel });
 
@@ -142,9 +156,9 @@ SynthDef(\inputAudioProcessor, {
 	params = In.kr(sourceInputBus, numSourceParams);
 	reverbMix = params[6].clip(0.0, 1.0);
 	audioIn = SoundIn.ar(inputChannel);
-	attenuation = In.kr(attenuationBus, 1);
+	attenuation = In.kr(attenuationBus, 1).lag(0.05);
 
-	satGains = In.kr(satGainBus, numSatellites);
+	satGains = In.kr(satGainBus, numSatellites).lag(0.05);
 	// .lag(0.05) smooths the per-channel delay-time bus so DelayC.ar's
 	// interpolated read doesn't click on instantaneous steps (boot-time
 	// `delayLevel` 0->1, fast source moves, large slider jumps).
@@ -153,29 +167,30 @@ SynthDef(\inputAudioProcessor, {
 		DelayC.ar(
 			in: satGains[i] * audioIn * attenuation,
 			maxdelaytime: 3.0,
-			delaytime: satDelays[i].squared
+			// Clamp before squaring: DelayC needs delaytime < maxdelaytime (3.0).
+			delaytime: satDelays[i].clip(0, 1.73).squared
 		)
 	});
 	satWet = satDry * reverbMix;
 
-	subMidGains = In.kr(subMidGainBus, numSubMid);
+	subMidGains = In.kr(subMidGainBus, numSubMid).lag(0.05);
 	subMidDelays = In.kr(subMidDelayBus, numSubMid).lag(0.05);
 	subMidDry = Array.fill(numSubMid, { |i|
 		DelayC.ar(
 			in: subMidGains[i] * audioIn * attenuation,
 			maxdelaytime: 3.0,
-			delaytime: subMidDelays[i].squared
+			delaytime: subMidDelays[i].clip(0, 1.73).squared
 		)
 	});
 	subMidWet = subMidDry * reverbMix;
 
-	subLfGains = In.kr(subLfGainBus, numSubLf);
+	subLfGains = In.kr(subLfGainBus, numSubLf).lag(0.05);
 	subLfDelays = In.kr(subLfDelayBus, numSubLf).lag(0.05);
 	subLfDry = Array.fill(numSubLf, { |i|
 		DelayC.ar(
 			in: subLfGains[i] * audioIn * attenuation,
 			maxdelaytime: 3.0,
-			delaytime: subLfDelays[i].squared
+			delaytime: subLfDelays[i].clip(0, 1.73).squared
 		)
 	});
 
@@ -192,27 +207,27 @@ SynthDef(\satReverbFX, {
 	decay = params[0].clip(0.0, 5.0);
 	feedback = params[1].clip(0.0, 0.99);
 
-	signals = In.ar(busSatPre, numSatellites);
-	signals = OnePole.ar(signals, 0.72);
-	signals = AllpassC.ar(signals, 0.3, LFNoise1.kr(1).range(0.3, 0.29), 3);
+	if(bypassReverbDiag) {
+		// Wet send only (pre-delay panner output). No allpass, no LocalIn/Out.
+		Out.ar(busSatPost, In.ar(busSatPre, numSatellites));
+	} {
+		signals = In.ar(busSatPre, numSatellites);
+		// Headroom before the feedback path: many sources sum into busSatPre, so
+		// the wet bus can run hot even when each source only sends a little reverb.
+		signals = (signals * 0.35).tanh;
+		signals = OnePole.ar(signals, 0.72);
+		signals = AllpassC.ar(signals, 0.3, LFNoise1.kr(1).range(0.3, 0.29), 3);
 
-	fbk = LocalIn.ar(numSatellites);
-	if(numSatellites > 1) { fbk = fbk.scramble };
-	fbk = OnePole.ar(fbk, 0.2);
-	fbk = fbk + signals;
-	// Generate fresh, decorrelated random delays per cascade stage so the
-	// allpass chain behaves as a Schroeder diffuser instead of a coherent
-	// comb filter. Reusing the same delay array across all 7 iterations (a
-	// post-refactor regression) let energy stack up in the feedback loop
-	// and produced the "growing distortion" symptom.
-	7.do({ fbk = AllpassN.ar(fbk, 0.05, { 0.050.rand } ! numSatellites, decay) });
-	// LeakDC stops any DC offset introduced by upstream biquad transients
-	// (EQ parameter jumps) from accumulating inside this feedback loop.
-	// Without it, a single bad coefficient set can ring forever as
-	// "growing distortion" while audio CPU stays flat.
-	fbk = LeakDC.ar(fbk, 0.995);
-	LocalOut.ar(fbk * feedback);
-	Out.ar(busSatPost, fbk);
+		fbk = LocalIn.ar(numSatellites);
+		if(numSatellites > 1) { fbk = fbk.scramble };
+		fbk = OnePole.ar(fbk, 0.2);
+		fbk = fbk + signals;
+		7.do({ fbk = AllpassN.ar(fbk, 0.05, { 0.050.rand } ! numSatellites, decay) });
+		fbk = LeakDC.ar(fbk, 0.99);
+		fbk = HPF.ar(fbk, 40);
+		LocalOut.ar((fbk * feedback).clip(-0.95, 0.95));
+		Out.ar(busSatPost, fbk);
+	};
 }).add;
 
 SynthDef(\subMidReverbFX, {
@@ -224,22 +239,24 @@ SynthDef(\subMidReverbFX, {
 	enabled = subParams[0].clip(0.0, 1.0);
 	mix = subParams[1].clip(0.0, 1.0);
 
-	signals = In.ar(busSubMidPre, numSubMid) * enabled * mix;
-	signals = OnePole.ar(signals, 0.72);
-	signals = AllpassC.ar(signals, 0.3, LFNoise1.kr(1).range(0.3, 0.29), 2);
+	if(bypassReverbDiag) {
+		Out.ar(busSubMidPost, In.ar(busSubMidPre, numSubMid) * enabled * mix);
+	} {
+		signals = In.ar(busSubMidPre, numSubMid) * enabled * mix;
+		signals = (signals * 0.35).tanh;
+		signals = OnePole.ar(signals, 0.72);
+		signals = AllpassC.ar(signals, 0.3, LFNoise1.kr(1).range(0.3, 0.29), 2);
 
-	fbk = LocalIn.ar(numSubMid);
-	if(numSubMid > 1) { fbk = fbk.scramble };
-	fbk = OnePole.ar(fbk, 0.2);
-	fbk = fbk + signals;
-	// Same Schroeder-diffuser fix as in \satReverbFX: fresh random delays
-	// per cascade stage prevent the allpass chain from acting as a coherent
-	// comb filter inside the feedback path.
-	5.do({ fbk = AllpassN.ar(fbk, 0.05, { 0.050.rand } ! numSubMid, decay) });
-	// See satReverbFX for why LeakDC is here.
-	fbk = LeakDC.ar(fbk, 0.995);
-	LocalOut.ar(fbk * feedback);
-	Out.ar(busSubMidPost, fbk);
+		fbk = LocalIn.ar(numSubMid);
+		if(numSubMid > 1) { fbk = fbk.scramble };
+		fbk = OnePole.ar(fbk, 0.2);
+		fbk = fbk + signals;
+		5.do({ fbk = AllpassN.ar(fbk, 0.05, { 0.050.rand } ! numSubMid, decay) });
+		fbk = LeakDC.ar(fbk, 0.99);
+		fbk = HPF.ar(fbk, 40);
+		LocalOut.ar((fbk * feedback).clip(-0.95, 0.95));
+		Out.ar(busSubMidPost, fbk);
+	};
 }).add;
 
 // Group filter + 3-band parametric EQ. v3 layout: eqOn at [0], then
