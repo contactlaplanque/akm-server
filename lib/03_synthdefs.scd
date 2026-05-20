@@ -16,11 +16,25 @@ var metersHz;
 // LocalIn/LocalOut feedback. If glitches disappear, the reverb loop is
 // the culprit. Set false (and restart the server) for normal operation.
 var bypassReverbDiag;
-bypassReverbDiag = true;
+// Diagnostic A/B: set true to bypass per-source DelayC in inputAudioProcessor
+// (keep panner gains/attenuation, remove time-varying delay read path).
+var bypassInputDelaysDiag;
+// Diagnostic A/B: set true to bypass all group filter+EQ stages and route
+// dry/wet sums directly to processed buses.
+var bypassGroupFilterEqDiag;
+bypassReverbDiag = false;
+bypassInputDelaysDiag = false;
+bypassGroupFilterEqDiag = false;
 
 "[AKM] adding SynthDefs...".postln;
 if(bypassReverbDiag) {
 	"[AKM] DIAG: reverb BYPASSED — sat/sub_mid wet buses pass through unchanged (no feedback). Set bypassReverbDiag = false in lib/03_synthdefs.scd and restart to restore.".postln;
+};
+if(bypassInputDelaysDiag) {
+	"[AKM] DIAG: input delays BYPASSED — DelayC path disabled in inputAudioProcessor.".postln;
+};
+if(bypassGroupFilterEqDiag) {
+	"[AKM] DIAG: group filter+EQ BYPASSED — processed buses receive raw dry/wet sums.".postln;
 };
 
 satX = ~satellites.collect({ |sp| sp[\position][0] });
@@ -163,36 +177,48 @@ SynthDef(\inputAudioProcessor, {
 	// interpolated read doesn't click on instantaneous steps (boot-time
 	// `delayLevel` 0->1, fast source moves, large slider jumps).
 	satDelays = In.kr(satDelayBus, numSatellites).lag(0.05);
-	satDry = Array.fill(numSatellites, { |i|
-		DelayC.ar(
-			in: satGains[i] * audioIn * attenuation,
-			maxdelaytime: 3.0,
-			// Clamp before squaring: DelayC needs delaytime < maxdelaytime (3.0).
-			delaytime: satDelays[i].clip(0, 1.73).squared
-		)
-	});
+	if(bypassInputDelaysDiag) {
+		satDry = Array.fill(numSatellites, { |i| satGains[i] * audioIn * attenuation });
+	} {
+		satDry = Array.fill(numSatellites, { |i|
+			DelayC.ar(
+				in: satGains[i] * audioIn * attenuation,
+				maxdelaytime: 3.0,
+				// Clamp before squaring: DelayC needs delaytime < maxdelaytime (3.0).
+				delaytime: satDelays[i].clip(0, 1.73).squared
+			)
+		});
+	};
 	satWet = satDry * reverbMix;
 
 	subMidGains = In.kr(subMidGainBus, numSubMid).lag(0.05);
 	subMidDelays = In.kr(subMidDelayBus, numSubMid).lag(0.05);
-	subMidDry = Array.fill(numSubMid, { |i|
-		DelayC.ar(
-			in: subMidGains[i] * audioIn * attenuation,
-			maxdelaytime: 3.0,
-			delaytime: subMidDelays[i].clip(0, 1.73).squared
-		)
-	});
+	if(bypassInputDelaysDiag) {
+		subMidDry = Array.fill(numSubMid, { |i| subMidGains[i] * audioIn * attenuation });
+	} {
+		subMidDry = Array.fill(numSubMid, { |i|
+			DelayC.ar(
+				in: subMidGains[i] * audioIn * attenuation,
+				maxdelaytime: 3.0,
+				delaytime: subMidDelays[i].clip(0, 1.73).squared
+			)
+		});
+	};
 	subMidWet = subMidDry * reverbMix;
 
 	subLfGains = In.kr(subLfGainBus, numSubLf).lag(0.05);
 	subLfDelays = In.kr(subLfDelayBus, numSubLf).lag(0.05);
-	subLfDry = Array.fill(numSubLf, { |i|
-		DelayC.ar(
-			in: subLfGains[i] * audioIn * attenuation,
-			maxdelaytime: 3.0,
-			delaytime: subLfDelays[i].clip(0, 1.73).squared
-		)
-	});
+	if(bypassInputDelaysDiag) {
+		subLfDry = Array.fill(numSubLf, { |i| subLfGains[i] * audioIn * attenuation });
+	} {
+		subLfDry = Array.fill(numSubLf, { |i|
+			DelayC.ar(
+				in: subLfGains[i] * audioIn * attenuation,
+				maxdelaytime: 3.0,
+				delaytime: subLfDelays[i].clip(0, 1.73).squared
+			)
+		});
+	};
 
 	Out.ar(busSatDry, satDry);
 	Out.ar(busSatPre, satWet);
@@ -271,6 +297,9 @@ SynthDef(\groupSatFilterEq, {
 	var dry, wet, sig, filterParams, eqParams, eqOn, fFreq, fRq, signal;
 	dry = In.ar(busSatDry, numSatellites);
 	wet = In.ar(busSatPost, numSatellites);
+	if(bypassGroupFilterEqDiag) {
+		Out.ar(busSatProcessed, dry + wet);
+	} {
 	filterParams = In.kr(satFilterBus, 2);
 	eqParams = In.kr(satEqBus, numEqParams);
 	eqOn = eqParams[0];
@@ -293,12 +322,16 @@ SynthDef(\groupSatFilterEq, {
 			db:   (eqOn * eqParams[9] * eqParams[11]).lag(0.05));
 	});
 	Out.ar(busSatProcessed, sig);
+	};
 }).add;
 
 SynthDef(\groupSubMidFilterEq, {
 	var dry, wet, sig, filterParams, eqParams, eqOn, fFreq, fRq, signal;
 	dry = In.ar(busSubMidDry, numSubMid);
 	wet = In.ar(busSubMidPost, numSubMid);
+	if(bypassGroupFilterEqDiag) {
+		Out.ar(busSubMidProcessed, dry + wet);
+	} {
 	filterParams = In.kr(subMidFilterBus, 2);
 	eqParams = In.kr(subMidEqBus, numEqParams);
 	eqOn = eqParams[0];
@@ -321,11 +354,15 @@ SynthDef(\groupSubMidFilterEq, {
 			db:   (eqOn * eqParams[9] * eqParams[11]).lag(0.05));
 	});
 	Out.ar(busSubMidProcessed, sig);
+	};
 }).add;
 
 SynthDef(\groupSubLfFilterEq, {
 	var dry, sig, filterParams, eqParams, eqOn, fFreq, fRq, signal;
 	dry = In.ar(busSubLfDry, numSubLf);
+	if(bypassGroupFilterEqDiag) {
+		Out.ar(busSubLfProcessed, dry);
+	} {
 	filterParams = In.kr(subLfFilterBus, 2);
 	eqParams = In.kr(subLfEqBus, numEqParams);
 	eqOn = eqParams[0];
@@ -348,6 +385,7 @@ SynthDef(\groupSubLfFilterEq, {
 			db:   (eqOn * eqParams[9] * eqParams[11]).lag(0.05));
 	});
 	Out.ar(busSubLfProcessed, sig);
+	};
 }).add;
 
 SynthDef(\outputRouter, {
